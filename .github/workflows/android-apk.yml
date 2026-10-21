@@ -1,0 +1,67 @@
+name: Release Android app
+
+# Builds the Android app file (.apk) on Expo's free build servers and attaches it
+# to a GitHub Release as sakhi-samachar.apk.
+# Needs the repository secret EXPO_TOKEN (README, Step 6).
+# Run by hand: Actions → Release Android app → Run workflow.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Check Expo token is set
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::Add the repository secret EXPO_TOKEN (Settings → Secrets and variables → Actions → Secrets)."
+            exit 1
+          fi
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install
+        run: npm ci
+
+      - name: Build APK on Expo (free queue, 15–90+ minutes)
+        run: eas build --platform android --profile preview --non-interactive --wait --json > build.json
+
+      - name: Download APK
+        run: |
+          URL=$(node -p "require('./build.json')[0].artifacts.buildUrl")
+          curl -fL "$URL" -o sakhi-samachar.apk
+
+      - name: App version
+        id: v
+        run: echo "version=$(node -p "require('./app.json').expo.version")" >> "$GITHUB_OUTPUT"
+
+      - name: Publish Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ steps.v.outputs.version }}
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" sakhi-samachar.apk --clobber
+          else
+            gh release create "$TAG" sakhi-samachar.apk \
+              --title "Sakhi Samachar ${{ steps.v.outputs.version }}" \
+              --notes "Android app file. Allow \"Install unknown apps\" once; if Play Protect warns, tap \"Install anyway\". Sakhi Samachar is a diary, not medical advice. Not validated for contraceptive advice." \
+              --latest
+          fi

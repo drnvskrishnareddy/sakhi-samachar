@@ -1,0 +1,76 @@
+name: Publish web app
+
+# Checks the code and publishes the web app to GitHub Pages
+# on every push to main, or by hand (Actions → Publish web app → Run workflow).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ vars.GOOGLE_WEB_CLIENT_ID }}
+      EXPO_PUBLIC_PRIVACY_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/privacy.html
+      EXPO_PUBLIC_UPDATE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/version.json
+      EXPO_BASE_URL: /${{ github.event.repository.name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Expo type references
+        run: echo '/// <reference types="expo/types" />' > expo-env.d.ts
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Types
+        run: npm run typecheck
+
+      - name: FIGO tests
+        run: npm test
+
+      - name: Drive tests
+        run: npm run test:drive
+
+      - name: Check Google client ID is set
+        run: |
+          if [ -z "$EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID" ]; then
+            echo "::error::Add the repository variable GOOGLE_WEB_CLIENT_ID (Settings → Secrets and variables → Actions → Variables)."
+            exit 1
+          fi
+
+      - name: Build web app
+        run: npm run build:web
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
