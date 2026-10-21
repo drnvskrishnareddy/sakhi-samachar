@@ -2,6 +2,7 @@
   "expo": {
     "name": "Sakhi Samachar",
     "slug": "sakhi-samachar",
+    "owner": "sakhisamachars-team",
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "sakhisamachar",
@@ -50,6 +51,11 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "21213771-9333-464b-983d-248962f7eeb5"
+      }
     }
   }
 }
